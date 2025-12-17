@@ -28,7 +28,8 @@ const SetupPanel: React.FC<SetupPanelProps> = ({ participants, onAdd, onRemove, 
           let width = img.width;
           let height = img.height;
           
-          const MAX_SIZE = 500;
+          // CRITICAL: Reduced size to 150px to allow URL Hash sharing
+          const MAX_SIZE = 150;
           if (width > height) {
             if (width > MAX_SIZE) {
               height *= MAX_SIZE / width;
@@ -46,7 +47,8 @@ const SetupPanel: React.FC<SetupPanelProps> = ({ participants, onAdd, onRemove, 
           const ctx = canvas.getContext('2d');
           ctx?.drawImage(img, 0, 0, width, height);
           
-          const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+          // Low quality jpeg to save URL space
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.5);
           resolve(dataUrl);
         };
         img.onerror = (err) => reject(err);
@@ -127,6 +129,10 @@ const SetupPanel: React.FC<SetupPanelProps> = ({ participants, onAdd, onRemove, 
             </div>
           </div>
         </div>
+        
+        <p className="text-xs text-slate-500 text-center">
+            * Las fotos se reducirán automáticamente para que el enlace sea compartible.
+        </p>
 
         <Button type="submit" variant="secondary" fullWidth disabled={!name || isProcessing}>
           {isProcessing ? '...' : '+ Agregar Participante'}

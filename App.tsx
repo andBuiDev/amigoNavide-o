@@ -92,12 +92,16 @@ const App: React.FC = () => {
         const newState = await startGame(false);
         setAppState(newState);
         
-        // CRITICAL: Immediately update URL with the game state hash
-        // This ensures if the user refreshes, they stay in the game.
-        // It also generates the "Link" automatically in the browser bar.
+        // CRITICAL: Force URL Update for Local Mode
         const hashLink = generateLegacyHash(newState);
         const hashPart = hashLink.split('#')[1];
-        window.history.pushState(null, '', `#${hashPart}`);
+        
+        // Directly set hash to ensure browser recognizes the anchor
+        window.location.hash = hashPart;
+        
+        // Store and Show Modal immediately so user sees the link is ready
+        setShareUrl(hashLink);
+        setShowShareModal(true);
         
     } catch (e) { alert((e as Error).message); }
   };
@@ -145,7 +149,6 @@ const App: React.FC = () => {
 
   const handleShareClick = () => {
      if (!appState) return;
-     // If Cloud ID exists, use that. Otherwise, use current browser URL (which has the hash)
      const url = appState.gameId ? getGameUrl(appState.gameId) : window.location.href;
      setShareUrl(url);
      setShowShareModal(true);
