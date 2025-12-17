@@ -143,7 +143,9 @@ export const markAsRevealed = async (participantId: string): Promise<AppState> =
 
 export const resetApp = () => {
   localStorage.removeItem(STORAGE_KEY);
-  window.location.href = window.location.pathname; // Hard reload clean URL
+  // Clear URL parameters and hash
+  window.history.pushState("", document.title, window.location.pathname);
+  window.location.reload();
 };
 
 // --- URL LOGIC ---
@@ -152,29 +154,41 @@ export const getGameUrl = (gameId: string): string => {
   return `${window.location.origin}${window.location.pathname}?id=${gameId}`;
 };
 
-export const tryImportFromUrl = (): boolean => {
+/**
+ * Tries to parse the state from the URL Hash.
+ * Returns the AppState if successful, or null if no valid hash found.
+ */
+export const tryImportFromUrl = (): AppState | null => {
   const hash = window.location.hash;
-  if (!hash || !hash.includes('g=')) return false;
+  if (!hash || !hash.includes('g=')) return null;
 
   try {
     const encoded = hash.split('g=')[1];
-    // Reverse the encoding used in generateLegacyHash
+    // Reverse the encoding
     const jsonString = decodeURIComponent(atob(encoded).split('').map(function(c) {
         return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
     }).join(''));
     
     const payload = JSON.parse(jsonString);
     
-    // Validate payload structure roughly
-    if (!payload.p || !Array.isArray(payload.p)) return false;
+    if (!payload.p || !Array.isArray(payload.p)) return null;
 
     const participants: Participant[] = payload.p.map((p: any) => ({
       id: p.i,
       name: p.n,
       photoUrl: p.u,
-      isRevealed: false
+      isRevealed: false // Reset revealed state on import to prevent cheating, or trust payload?
+      // Better to trust payload assignments but maybe reset revealed local UI if needed.
+      // For simplicity in this logic, we assume isRevealed comes from local interactions or is reset.
+      // Actually, let's keep it clean:
     }));
-
+    
+    // Recovery of isRevealed if present in payload (optional, usually not shared in simple hash to allow re-play)
+    // But for "Amigo Secreto", we usually want the admin to share the link. 
+    // If we share the link, we don't want to share WHO revealed whom. 
+    // So isRevealed stays false for the new user importing it, 
+    // unless they click their name.
+    
     const assignments = payload.a || {};
 
     const newState: AppState = {
@@ -186,20 +200,16 @@ export const tryImportFromUrl = (): boolean => {
     };
 
     saveAppState(newState);
-    
-    // NOTE: We do NOT clean the URL here anymore. 
-    // This allows the user to see and share the link with the hash present.
-    
-    return true;
+    return newState;
   } catch (e) {
     console.error("Failed to import from hash", e);
-    return false;
+    return null;
   }
 };
 
 // Legacy Hash Logic
-export const generateLegacyHash = (): string => {
-  const state = getAppState();
+export const generateLegacyHash = (stateOverride?: AppState): string => {
+  const state = stateOverride || getAppState();
   const payload = {
     p: state.participants.map(p => ({
       i: p.id,

@@ -37,19 +37,29 @@ const App: React.FC = () => {
 
   // Initial Load
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const gameId = params.get('id');
+    const initializeApp = async () => {
+        const params = new URLSearchParams(window.location.search);
+        const gameId = params.get('id');
 
-    // 1. Try Import (Legacy Hash) for backward compatibility
-    tryImportFromUrl();
+        // 1. Priority: Cloud Game ID
+        if (gameId) {
+          handleCloudLoad(gameId);
+          return;
+        }
+
+        // 2. Priority: URL Hash (Local Share)
+        const importedState = tryImportFromUrl();
+        if (importedState) {
+            setAppState(importedState);
+            return;
+        }
+
+        // 3. Priority: Local Storage (Last session)
+        const state = getAppState();
+        setAppState(state);
+    };
     
-    // 2. Cloud or Local Load
-    if (gameId) {
-      handleCloudLoad(gameId);
-    } else {
-      const state = getAppState();
-      setAppState(state);
-    }
+    initializeApp();
   }, []);
 
   const handleCloudLoad = (gameId: string) => {
@@ -76,13 +86,19 @@ const App: React.FC = () => {
 
   // --- Actions ---
 
-  const handleStartRequest = () => {
-    // Default to local simple start to avoid complexity
+  const handleStartRequest = async () => {
+    // Default to local simple start
     try {
-        startGame(false).then(s => {
-            setAppState(s);
-            // No URL updates, no modals. Just switch view state via appState update.
-        });
+        const newState = await startGame(false);
+        setAppState(newState);
+        
+        // CRITICAL: Immediately update URL with the game state hash
+        // This ensures if the user refreshes, they stay in the game.
+        // It also generates the "Link" automatically in the browser bar.
+        const hashLink = generateLegacyHash(newState);
+        const hashPart = hashLink.split('#')[1];
+        window.history.pushState(null, '', `#${hashPart}`);
+        
     } catch (e) { alert((e as Error).message); }
   };
 
@@ -111,7 +127,6 @@ const App: React.FC = () => {
       setSelectedGiver(participant);
       setMatchedReceiver(receiver);
       setView('reveal');
-      // No URL update
     }
   };
 
@@ -119,7 +134,6 @@ const App: React.FC = () => {
     setSelectedGiver(null);
     setMatchedReceiver(null);
     setView('home');
-    // No URL update
   };
 
   const handleRevealComplete = async () => {
@@ -131,12 +145,13 @@ const App: React.FC = () => {
 
   const handleShareClick = () => {
      if (!appState) return;
-     const url = appState.gameId ? getGameUrl(appState.gameId) : generateLegacyHash();
+     // If Cloud ID exists, use that. Otherwise, use current browser URL (which has the hash)
+     const url = appState.gameId ? getGameUrl(appState.gameId) : window.location.href;
      setShareUrl(url);
      setShowShareModal(true);
   };
 
-  if (!appState) return <div className="min-h-screen bg-slate-900 flex items-center justify-center text-white">Cargando...</div>;
+  if (!appState) return <div className="min-h-screen bg-slate-900 flex items-center justify-center text-white">Cargando Navidad...</div>;
 
   // RENDER: Reveal Page (Virtual Page)
   if (view === 'reveal' && selectedGiver && matchedReceiver) {
@@ -191,13 +206,16 @@ const App: React.FC = () => {
 
         <footer className="mt-16 text-center text-slate-500 text-sm pb-8">
            {appState.isSetup && (
-             <div className="flex justify-center gap-4 mb-4">
-                <Button variant="gold" onClick={handleShareClick} className="py-2 px-4 text-sm bg-yellow-500/20 border-yellow-500/50 text-yellow-200 hover:text-red-900">
-                    🔗 Guardar / Compartir
+             <div className="flex flex-col items-center gap-4 mb-4">
+                <Button variant="gold" onClick={handleShareClick} className="py-2 px-6 text-sm bg-yellow-500/20 border-yellow-500/50 text-yellow-200 hover:text-red-900 w-full max-w-xs">
+                    🔗 Copiar Link de la Partida
                 </Button>
-                <Button variant="danger" onClick={() => { if(confirm("¿Reiniciar todo?")) resetApp(); }} className="py-2 px-4 text-sm bg-red-900/50 hover:bg-red-900">
-                  Reiniciar
-                </Button>
+                <button 
+                    onClick={() => { if(confirm("¿Seguro que quieres borrar todo y empezar de cero?")) resetApp(); }} 
+                    className="text-xs text-red-400/70 hover:text-red-400 underline"
+                >
+                  Reiniciar Sorteo
+                </button>
              </div>
            )}
            <p>Hecho con ❤️ para la Navidad</p>
